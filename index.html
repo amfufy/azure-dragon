@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Dragon — Automated Gold Trading Bot</title>
+<meta name="description" content="Azure Dragon is an automated XAUUSD trading bot that trades on rules, not emotions. ₱1,500/month. Trading involves risk of loss. Not financial advice.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&text=%E9%9D%92%E9%BE%8D&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#030912; --ink2:#06101F; --azure:#2E9BFF; --sky:#7FD4FF; --jade:#3FE0C0; --gold:#F5C26B; --warn:#FFB547;
+  --text:#FFFFFF; --muted:#AEBBD0; --soft:#C6D2E3; --line:rgba(255,255,255,.1);
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#030912;--text:#FFFFFF}}
+:root[data-theme="dark"]{--ink:#030912;--text:#FFFFFF}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:calc(80px + env(safe-area-inset-top,0px));background:var(--ink)}
+body{margin:0;background:var(--ink);color:var(--text);font-family:'IBM Plex Sans','Helvetica Neue',Arial,sans-serif;overflow-x:hidden}
+a{color:var(--sky)}a:hover{color:#fff}
+img{max-width:100%}
+:focus-visible{outline:2px solid var(--sky);outline-offset:3px}
+.han{font-family:'Noto Serif TC','Songti TC','SimSun',serif}
+.display{font-family:'Unbounded','Arial Black',sans-serif;font-weight:700;letter-spacing:-.01em}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+
+/* dragon canvas */
+#dragon{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.vignette{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,transparent 35%,rgba(3,9,18,.75) 100%)}
+.page{position:relative;z-index:1}
+
+/* shared effects from base theme */
+@property --a{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes rot{to{--a:360deg}}
+@keyframes shimmer{to{background-position:200% center}}
+@keyframes sweep{0%{transform:translateX(-120%) skewX(-20deg)}60%,100%{transform:translateX(260%) skewX(-20deg)}}
+@keyframes marquee{to{transform:translateX(-50%)}}
+@keyframes blink{50%{opacity:0}}
+@keyframes scan{0%{top:-10%}100%{top:110%}}
+@keyframes beam{0%{left:-30%}100%{left:100%}}
+@keyframes ringpulse{0%{box-shadow:0 0 0 0 rgba(46,155,255,.6)}100%{box-shadow:0 0 0 16px rgba(46,155,255,0)}}
+@keyframes reveal{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+.shimmer-text{background:linear-gradient(120deg,#FFFFFF 25%,#7FD4FF 55%,#3FE0C0 75%,#FFFFFF);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 8s linear infinite}
+.shine{position:relative;overflow:hidden}
+.shine::after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:sweep 3.4s ease-in-out infinite;pointer-events:none}
+.cursor{display:inline-block;width:8px;height:14px;background:var(--azure);margin-left:4px;animation:blink 1s steps(1) infinite}
+.tilt{position:relative;overflow:hidden;transition:transform .35s ease,box-shadow .35s ease,border-color .35s ease}
+.tilt:hover{transform:perspective(900px) rotateX(5deg) rotateY(-5deg) translateZ(18px);box-shadow:0 30px 60px -24px rgba(46,155,255,.5);border-color:rgba(46,155,255,.6)!important}
+.scanline{position:absolute;left:0;right:0;height:60px;background:linear-gradient(to bottom,transparent,rgba(46,155,255,.14),transparent);animation:scan 5s linear infinite;pointer-events:none}
+@supports (animation-timeline: view()){.reveal{animation:reveal linear both;animation-timeline:view();animation-range:entry 0% cover 25%}}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:15px 26px;font-weight:600;font-size:16px;text-decoration:none;border:0;cursor:pointer;font-family:inherit}
+.btn-primary{background:var(--azure);color:#02101F;box-shadow:0 0 32px rgba(46,155,255,.6),0 12px 30px -10px rgba(46,155,255,.6)}
+.btn-primary:hover{color:#02101F;background:#57B1FF}
+.btn-ghost{background:rgba(255,255,255,.04);color:#fff;border:1px solid rgba(255,255,255,.28);backdrop-filter:blur(8px)}
+.btn[aria-disabled="true"]{background:rgba(255,255,255,.08);color:#7F8BA0;box-shadow:none;cursor:not-allowed}
+.btn[aria-disabled="true"]::after{display:none}
+
+/* nav */
+header.top{position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(3,9,18,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding-top:env(safe-area-inset-top,0px)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-top:14px;padding-bottom:14px}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:#fff}
+.seal{width:38px;height:38px;border:1.5px solid var(--azure);display:grid;place-items:center;font-size:15px;color:var(--sky);box-shadow:0 0 16px rgba(46,155,255,.55);line-height:1}
+.brand b{font-family:'Unbounded',sans-serif;font-size:17px;letter-spacing:.04em}
+.navlinks{display:flex;gap:26px;font-size:14px}
+.navlinks a{color:var(--soft);text-decoration:none}
+.navlinks a:hover{color:#fff}
+.nav-cta{min-height:44px;padding:10px 18px;font-size:14px}
+
+/* hero */
+.hero{position:relative;min-height:calc(100vh - 70px);display:flex;align-items:center}
+.hero .wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:56px;align-items:center;padding-top:72px;padding-bottom:110px}
+.badge{display:inline-flex;align-self:flex-start;align-items:center;gap:10px;border:1px solid rgba(46,155,255,.45);background:rgba(46,155,255,.1);padding:8px 14px;font-size:12px;letter-spacing:.08em;color:var(--sky)}
+.dot{width:8px;height:8px;background:var(--jade);box-shadow:0 0 10px var(--jade);border-radius:50%}
+.hero h1{margin:0;font-size:clamp(38px,5vw,68px);line-height:1.04}
+.hero p.lead{margin:0;font-size:19px;line-height:1.6;color:var(--soft);max-width:540px;text-shadow:0 2px 18px rgba(3,9,18,.9)}
+.hero-col{position:relative;display:flex;flex-direction:column;gap:26px}
+.hero-col::before{content:"";position:absolute;inset:-60px -80px;z-index:-1;background:radial-gradient(ellipse at 40% 50%,rgba(3,9,18,.78),rgba(3,9,18,0) 70%);pointer-events:none}
+.ctas{display:flex;flex-wrap:wrap;gap:14px}
+.fine{font-size:13px;color:var(--muted);line-height:1.5}
+.fine strong{color:var(--warn);font-weight:600}
+.panel{position:relative;width:100%;max-width:470px;justify-self:center;background:rgba(6,14,30,.74);border:1px solid rgba(46,155,255,.38);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 40px 80px -30px rgba(0,0,0,.9),0 0 60px -10px rgba(46,155,255,.4);overflow:hidden;transform:perspective(1300px) rotateX(var(--rx,6deg)) rotateY(var(--ry,-12deg));transition:transform .25s ease-out}
+.panel-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.panel-head b{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600}
+.row{padding:14px 22px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:15px;color:#DDE6F2}
+.chip{font-size:11px;border:1px solid var(--jade);color:#9FF5E2;padding:4px 8px;box-shadow:0 0 12px rgba(63,224,192,.35);white-space:nowrap}
+.chip.zero{border-color:var(--gold);color:#FFE2A8;box-shadow:0 0 12px rgba(245,194,107,.4)}
+.panel-foot{padding:16px 22px;background:linear-gradient(90deg,rgba(46,155,255,.2),rgba(63,224,192,.14));font-size:14px}
+@media (max-width:900px){.panel{transform:none}.navlinks{display:none}}
+
+/* marquee */
+.marquee{overflow:hidden;border-top:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08);background:rgba(3,9,18,.7);-webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
+.marquee-track{display:flex;width:max-content;animation:marquee 34s linear infinite}
+.mq{display:flex;align-items:center;gap:16px;padding:20px 18px;font-size:14px;letter-spacing:.08em;color:var(--soft);white-space:nowrap}
+.mq i{display:inline-block;width:8px;height:8px;border:1.5px solid var(--azure);transform:rotate(45deg);box-shadow:0 0 8px rgba(46,155,255,.8)}
+
+/* sections */
+section.band{position:relative;background:rgba(3,9,18,.8);border-top:1px solid rgba(255,255,255,.06)}
+section.band.alt{background:linear-gradient(180deg,rgba(6,16,31,.88),rgba(3,9,18,.88))}
+section.band.clear{background:rgba(3,9,18,.45)}
+.sec{padding:100px 24px;display:flex;flex-direction:column;gap:44px;max-width:1200px;margin:0 auto}
+.kicker{font-size:13px;letter-spacing:.1em;color:var(--sky)}
+h2{margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,44px);line-height:1.12;letter-spacing:-.01em;max-width:780px}
+.intro{display:flex;flex-direction:column;gap:16px;max-width:760px}
+.intro p{margin:0;font-size:18px;line-height:1.6;color:var(--soft)}
+.grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:rgba(255,255,255,.035);border:1px solid var(--line);padding:28px;display:flex;flex-direction:column;gap:12px}
+.card .big{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--sky);text-shadow:0 0 18px rgba(46,155,255,.6)}
+.card p{margin:0;font-size:16px;line-height:1.55;color:var(--soft)}
+.card h3{margin:0;font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600}
+.ticks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+.ticks li{position:relative;padding-left:24px;font-size:15px;line-height:1.5;color:var(--soft)}
+.ticks li::before{content:"";position:absolute;left:0;top:6px;width:10px;height:10px;border:1.5px solid var(--azure);transform:rotate(45deg);box-shadow:0 0 8px rgba(46,155,255,.7)}
+.ticks.dim li::before{border-color:#6B7891;box-shadow:none}
+
+/* capital-first */
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:56px;align-items:center}
+.layers{display:flex;flex-direction:column;gap:12px}
+.layer{display:flex;gap:18px;align-items:flex-start;padding:20px 22px;border:1px solid rgba(46,155,255,.3);background:linear-gradient(100deg,rgba(46,155,255,.12),rgba(3,9,18,.4));position:relative}
+.layer .n{font-family:'JetBrains Mono',monospace;color:var(--sky);font-size:14px;padding-top:3px;min-width:28px}
+.layer h3{margin:0 0 4px;font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600}
+.layer p{margin:0;font-size:15px;line-height:1.5;color:var(--muted)}
+
+/* compare */
+.compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.compare .col{padding:32px;display:flex;flex-direction:column;gap:18px;border:1px solid var(--line);background:rgba(255,255,255,.025)}
+.compare .col.us{border-color:rgba(46,155,255,.55);background:linear-gradient(150deg,rgba(46,155,255,.16),rgba(63,224,192,.1));box-shadow:0 0 60px -10px rgba(46,155,255,.4)}
+.compare h3{margin:0;font-family:'Unbounded',sans-serif;font-size:22px}
+
+/* steps */
+.steps-track{position:relative;height:2px;background:rgba(255,255,255,.1);overflow:hidden}
+.steps-track::after{content:"";position:absolute;top:0;width:30%;height:2px;background:linear-gradient(90deg,transparent,var(--azure),var(--jade),transparent);box-shadow:0 0 12px var(--azure);animation:beam 3s linear infinite}
+.step{border-left:1px solid rgba(46,155,255,.5);padding-left:20px;display:flex;flex-direction:column;gap:10px}
+.step-n{display:inline-flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--sky)}
+.step-dot{width:12px;height:12px;border-radius:50%;background:var(--azure);animation:ringpulse 2s ease-out infinite}
+.step h3{margin:0;font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:600}
+.step p{margin:0;font-size:15px;line-height:1.55;color:var(--muted)}
+
+/* pricing */
+.price-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:center}
+.spin-border{position:relative;isolation:isolate;padding:36px;display:flex;flex-direction:column;gap:22px;box-shadow:0 0 80px -12px rgba(46,155,255,.55),0 40px 80px -30px rgba(0,0,0,.9)}
+.spin-border::before{content:"";position:absolute;inset:-2px;z-index:-2;background:conic-gradient(from var(--a),#2E9BFF,#3FE0C0,#F5C26B,#2E9BFF);animation:rot 5s linear infinite}
+.spin-border::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(165deg,#0B1A33,#071425)}
+.price{font-family:'Unbounded',sans-serif;font-weight:700;font-size:54px;text-shadow:0 0 30px rgba(46,155,255,.55)}
+.price small{font-family:'IBM Plex Sans',sans-serif;font-size:17px;font-weight:500;color:var(--soft);text-shadow:none}
+.tag{position:absolute;top:-14px;left:36px;background:var(--azure);color:#02101F;font-size:11px;letter-spacing:.08em;padding:6px 10px;font-family:'JetBrains Mono',monospace}
+.ack{display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.5;color:var(--soft);cursor:pointer;padding:14px;border:1px solid rgba(255,181,71,.4);background:rgba(255,181,71,.07)}
+.ack input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--azure);flex:none}
+.capital{display:flex;flex-direction:column;gap:18px}
+.capital .num{font-family:'Unbounded',sans-serif;font-size:clamp(56px,8vw,96px);font-weight:700;line-height:1;color:var(--gold);text-shadow:0 0 40px rgba(245,194,107,.35)}
+
+/* risk */
+.risk{border:1px solid rgba(255,181,71,.55);background:linear-gradient(160deg,rgba(255,181,71,.09),rgba(3,9,18,.6));padding:40px;display:flex;flex-direction:column;gap:28px}
+.risk-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px 36px;margin:0;padding:0;list-style:none}
+.risk-list li{position:relative;padding-left:34px}
+.risk-list li::before{content:"!";position:absolute;left:0;top:1px;width:22px;height:22px;display:grid;place-items:center;border:1.5px solid var(--warn);color:var(--warn);font-family:'JetBrains Mono',monospace;font-size:12px;transform:rotate(45deg)}
+.risk-list b{display:block;font-family:'Space Grotesk',sans-serif;font-size:17px;margin-bottom:6px;color:#fff}
+.risk-list span{font-size:15px;line-height:1.55;color:var(--soft)}
+.nfa{border-top:1px solid rgba(255,181,71,.35);padding-top:24px;display:flex;flex-direction:column;gap:10px}
+.nfa h3{margin:0;font-family:'Space Grotesk',sans-serif;font-size:20px;color:var(--warn)}
+.nfa p{margin:0;font-size:15px;line-height:1.65;color:var(--soft);max-width:900px}
+
+/* faq */
+details{border-top:1px solid rgba(255,255,255,.12);padding:16px 0}
+details summary{cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;list-style:none;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"+";font-family:'JetBrains Mono',monospace;color:var(--sky);font-size:22px;transition:transform .25s}
+details[open] summary::after{transform:rotate(45deg)}
+details p{margin:10px 0 0;font-size:16px;line-height:1.6;color:var(--muted);max-width:760px}
+
+/* final */
+.final{text-align:center;align-items:center;padding:130px 24px 150px}
+.final h2{margin:0 auto;font-size:clamp(32px,4.6vw,58px);max-width:900px}
+.final .han-big{font-size:clamp(70px,12vw,140px);color:rgba(127,212,255,.16);line-height:1;letter-spacing:.1em;text-shadow:0 0 40px rgba(46,155,255,.4)}
+
+footer{position:relative;z-index:1;background:#020610;color:#8C99AE;border-top:1px solid rgba(255,255,255,.06)}
+footer .wrap{padding-top:32px;padding-bottom:36px;display:flex;flex-direction:column;gap:16px;font-size:13px;line-height:1.6}
+footer .row2{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-size:14px}
+
+@media (prefers-reduced-motion:reduce){.shimmer-text,.shine::after,.marquee-track,.spin-border::before,.steps-track::after,.step-dot,.cursor,.scanline,.reveal{animation:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<canvas id="dragon" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<div class="page">
+<header class="top">
+<div class="wrap">
+  <a class="brand" href="#hero"><span class="seal han">龍</span><b>AZURE DRAGON</b></a>
+  <nav class="navlinks" aria-label="Main">
+    <a href="#how">How it works</a><a href="#protection">Protection</a><a href="#pricing">Pricing</a><a href="#risks">Risks</a><a href="#faq">FAQ</a>
+  </nav>
+  <a class="btn btn-primary shine nav-cta" href="#pricing">Subscribe</a>
+</div>
+</header>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+<div class="wrap">
+  <div class="hero-col">
+    <div class="badge mono"><span class="dot"></span>XAUUSD BOT ONLINE<span class="cursor" aria-hidden="true"></span></div>
+    <h1 class="display shimmer-text">Trade gold with zero emotion.</h1>
+    <p class="lead">Azure Dragon is an automated gold trading bot. It enters and exits on fixed rules — no fear, no greed, no revenge trades — so you can work toward passive income from a starting account of $200, with protecting your capital as the first rule.</p>
+    <div class="ctas">
+      <a class="btn btn-primary shine" href="#pricing">Start for ₱1,500/month</a>
+      <a class="btn btn-ghost" href="#risks">Read the risks first</a>
+    </div>
+    <div class="fine"><strong>Trading involves risk of loss.</strong> Profits are not guaranteed. Azure Dragon is software, not a financial advisor.</div>
+  </div>
+
+  <div class="panel" id="panel" aria-label="Example of the bot's pre-trade checklist">
+    <div class="scanline"></div>
+    <div class="panel-head"><b>Before every entry</b><span class="mono" style="font-size:12px;color:var(--sky)">PRE-TRADE CHECK</span></div>
+    <div class="row"><span>Signal confirmed on M1 chart</span><span class="chip mono">PASS</span></div>
+    <div class="row"><span>Lot size fixed at 0.01</span><span class="chip mono">PASS</span></div>
+    <div class="row"><span>Stop loss attached to order</span><span class="chip mono">PASS</span></div>
+    <div class="row"><span>Daily loss limit not reached</span><span class="chip mono">PASS</span></div>
+    <div class="row"><span>Spread within limit</span><span class="chip mono">PASS</span></div>
+    <div class="row"><span>Emotion level</span><span class="chip zero mono">0</span></div>
+    <div class="panel-foot">If any check fails, the dragon sits out.</div>
+  </div>
+</div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee mono" aria-label="Bot features"><div class="marquee-track">
+<span class="mq"><i></i>XAUUSD GOLD</span><span class="mq"><i></i>M1 SCALPING</span><span class="mq"><i></i>0.01 LOT</span><span class="mq"><i></i>STOP LOSS ON ENTRY</span><span class="mq"><i></i>DAILY LOSS LIMIT</span><span class="mq"><i></i>EQUITY STOP</span><span class="mq"><i></i>24/5 MARKET</span><span class="mq"><i></i>NO FOMO</span><span class="mq"><i></i>NO REVENGE TRADES</span><span class="mq"><i></i>START AT $200</span>
+<span class="mq"><i></i>XAUUSD GOLD</span><span class="mq"><i></i>M1 SCALPING</span><span class="mq"><i></i>0.01 LOT</span><span class="mq"><i></i>STOP LOSS ON ENTRY</span><span class="mq"><i></i>DAILY LOSS LIMIT</span><span class="mq"><i></i>EQUITY STOP</span><span class="mq"><i></i>24/5 MARKET</span><span class="mq"><i></i>NO FOMO</span><span class="mq"><i></i>NO REVENGE TRADES</span><span class="mq"><i></i>START AT $200</span>
+</div></div>
+
+<!-- PAIN -->
+<section class="band">
+<div class="sec reveal">
+  <div class="intro">
+    <div class="kicker mono">Sound familiar?</div>
+    <h2>Most traders don't lose to the market. They lose to themselves.</h2>
+  </div>
+  <div class="grid">
+    <div class="card tilt"><div class="big">FOMO</div><p>Gold spikes, you jump in late, and buy the top.</p></div>
+    <div class="card tilt"><div class="big">REVENGE</div><p>One loss, then you double the lot to win it back. The account bleeds.</p></div>
+    <div class="card tilt"><div class="big">HESITATION</div><p>The setup was right. You froze, and watched it run without you.</p></div>
+    <div class="card tilt"><div class="big">3:00 AM</div><p>Gold moves while you sleep. Your stop was never set.</p></div>
+  </div>
+  <p style="margin:0;font-size:20px;line-height:1.5;max-width:760px"><strong>The dragon feels none of it. It follows the same rules on every trade.</strong></p>
+</div>
+</section>
+
+<!-- PROTECTION -->
+<section class="band alt" id="protection">
+<div class="sec reveal">
+  <div class="split">
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="kicker mono">Capital first</div>
+      <h2>Built to protect your equity before chasing profit.</h2>
+      <p style="margin:0;font-size:18px;line-height:1.6;color:var(--soft)">A small account can't survive big swings. Every trade passes through four layers of protection, in this order. These reduce risk — they can't remove it.</p>
+    </div>
+    <div class="layers">
+      <div class="layer"><span class="n">01</span><div><h3>Small, fixed size</h3><p>0.01 lot per entry, so one trade can't decide your month.</p></div></div>
+      <div class="layer"><span class="n">02</span><div><h3>Stop loss on entry</h3><p>The exit is placed with the order, before price can move.</p></div></div>
+      <div class="layer"><span class="n">03</span><div><h3>Daily loss limit</h3><p>If the day's loss reaches [X]% of equity, the bot stops until the next session.</p></div></div>
+      <div class="layer"><span class="n">04</span><div><h3>Equity stop</h3><p>If equity falls [Y]% from its peak, all positions close and trading pauses for your review.</p></div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- COMPARE -->
+<section class="band">
+<div class="sec reveal">
+  <h2>You vs. the dragon.</h2>
+  <div class="compare">
+    <div class="col">
+      <h3 style="color:var(--muted)">Trading by hand</h3>
+      <ul class="ticks dim">
+        <li>Lot size changes with your mood</li>
+        <li>Misses moves while you work or sleep</li>
+        <li>Closes winners early, holds losers too long</li>
+        <li>Screen time every day</li>
+      </ul>
+    </div>
+    <div class="col us">
+      <h3>Azure Dragon</h3>
+      <ul class="ticks">
+        <li>Same lot size and rules on every trade</li>
+        <li>Watches XAUUSD through the whole trading week</li>
+        <li>Enters and exits exactly as programmed</li>
+        <li>You check results, not charts</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- HOW -->
+<section class="band clear" id="how">
+<div class="sec reveal">
+  <h2>How it works</h2>
+  <div class="steps-track" aria-hidden="true"></div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr))">
+    <div class="step"><span class="step-n"><span class="step-dot"></span>01</span><h3>Subscribe</h3><p>₱1,500 a month gives you the bot, the setup guide, and updates.</p></div>
+    <div class="step"><span class="step-n"><span class="step-dot"></span>02</span><h3>Fund your own account</h3><p>Open an account with a supported broker and deposit from $200. Your money stays with you.</p></div>
+    <div class="step"><span class="step-n"><span class="step-dot"></span>03</span><h3>Install and set limits</h3><p>Load the bot, set your daily loss limit and equity stop, and switch it on.</p></div>
+    <div class="step"><span class="step-n"><span class="step-dot"></span>04</span><h3>Let it trade</h3><p>The dragon handles entries and exits. You review the results each day.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- PRICING -->
+<section class="band alt" id="pricing">
+<div class="sec reveal">
+  <div class="price-wrap">
+    <div class="capital">
+      <div class="kicker mono">Start small</div>
+      <div class="num">$200</div>
+      <h2 style="font-size:clamp(24px,2.8vw,34px)">Recommended starting capital.</h2>
+      <p style="margin:0;font-size:17px;line-height:1.6;color:var(--soft);max-width:520px">Start with an amount you can afford to lose completely, learn how the bot behaves on a live account, and grow only from results — never from borrowed money or savings you need.</p>
+    </div>
+
+    <div class="spin-border">
+      <div class="tag">ONE PLAN</div>
+      <div><div class="display" style="font-size:22px">Azure Dragon</div><div style="font-size:15px;color:var(--soft);margin-top:6px">Full bot access for one trading account</div></div>
+      <div class="price">₱1,500<small>/month</small></div>
+      <ul class="ticks">
+        <li>Azure Dragon bot license, 1 account</li>
+        <li>Step-by-step setup guide</li>
+        <li>Recommended risk settings for $200 accounts</li>
+        <li>Bot updates included</li>
+        <li>Support via [support channel]</li>
+        <li>Month to month — cancel anytime</li>
+      </ul>
+      <label class="ack"><input type="checkbox" id="ack"> <span>I've read the <a href="#risks">risk disclosure</a>. I understand I can lose some or all of my capital and that this is not financial advice.</span></label>
+      <a class="btn btn-primary shine" id="subscribe" href="[PAYMENT LINK]" aria-disabled="true">Subscribe for ₱1,500/month</a>
+      <div class="fine">The subscription pays for software access only. It is not an investment and does not include any share of trading profits.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- RISKS -->
+<section class="band" id="risks">
+<div class="sec reveal">
+  <div class="intro">
+    <div class="kicker mono" style="color:var(--warn)">Risk disclosure</div>
+    <h2>Read this before you subscribe.</h2>
+    <p>Automated trading removes emotion. It does not remove risk.</p>
+  </div>
+  <div class="risk">
+    <ul class="risk-list">
+      <li><b>You can lose all of your capital</b><span>Gold (XAUUSD) is traded with leverage. Leverage makes both gains and losses larger, and losses can exceed what you expect.</span></li>
+      <li><b>No guaranteed income</b><span>There is no fixed or promised monthly return. Some weeks and months will lose money.</span></li>
+      <li><b>Past results don't predict the future</b><span>Backtests, demo results, and screenshots often look better than live trading. Market conditions change.</span></li>
+      <li><b>Gold moves fast on news</b><span>US inflation data, jobs reports, and Fed decisions can cause spikes, gaps, and slippage that skip past a stop loss.</span></li>
+      <li><b>Grid trades add exposure</b><span>The grid feature opens extra positions when price moves against the first trade. In a strong trend, losses can build quickly. The equity stop limits this, but cannot prevent every loss.</span></li>
+      <li><b>Technology can fail</b><span>Internet, VPS, platform, or broker outages and software bugs can cause missed exits or unexpected trades.</span></li>
+      <li><b>Your broker affects results</b><span>Spreads, commissions, swaps, leverage, and execution speed differ between brokers and change over time.</span></li>
+      <li><b>Small accounts are fragile</b><span>On a $200 account, a single bad day can be a large share of your balance. Only trade money you can afford to lose.</span></li>
+    </ul>
+    <div class="nfa">
+      <h3>Not a financial advisor</h3>
+      <p>Azure Dragon is a software tool. We are not a licensed financial advisor, broker, or investment company, and we are not registered as an investment adviser with the Securities and Exchange Commission (SEC) of the Philippines. Nothing on this page is financial, investment, legal, or tax advice. We don't manage, hold, or have access to withdraw your funds. You decide whether to use the bot, and you are fully responsible for your own trading results. If you're unsure, speak with a licensed financial professional before trading.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- FAQ -->
+<section class="band alt" id="faq">
+<div class="sec reveal" style="max-width:900px">
+  <h2>Questions</h2>
+  <div>
+    <details><summary>Will I earn a fixed amount every month?</summary><p>No. Results change with the market. Some months may be profitable, others may lose money. Anyone promising fixed returns from trading should be treated with caution.</p></details>
+    <details><summary>How much do I need to start?</summary><p>We recommend at least $200 in your own broker account, traded at 0.01 lot. A bigger account doesn't make trading risk-free.</p></details>
+    <details><summary>Do you hold my money?</summary><p>No. Your funds stay in your own broker account under your name. The bot only places trades on that account. Never send trading capital to anyone.</p></details>
+    <details><summary>Which broker and platform do I need?</summary><p>Azure Dragon runs on [PLATFORM, e.g. MetaTrader 5] with brokers that offer XAUUSD. The setup guide lists the account requirements.</p></details>
+    <details><summary>Does it run when my computer is off?</summary><p>The platform must stay online for the bot to trade and manage exits. A VPS (a computer in the cloud that runs 24/7) is recommended.</p></details>
+    <details><summary>Can I cancel?</summary><p>Yes. It's ₱1,500 month to month. Cancel anytime before your next billing date and you won't be charged again.</p></details>
+    <details><summary>Is this financial advice?</summary><p>No. Azure Dragon is a trading tool. Read the full risk disclosure above before you subscribe.</p></details>
+  </div>
+</div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="band clear">
+<div class="sec final reveal">
+  <div class="han han-big" aria-hidden="true">青龍</div>
+  <h2 class="shimmer-text">Let the dragon keep the discipline.</h2>
+  <p style="margin:0 auto;font-size:19px;line-height:1.55;color:var(--soft);max-width:620px">Rules on every trade, protection before profit, and zero emotion at entry. ₱1,500 a month, cancel anytime.</p>
+  <a class="btn btn-primary shine" href="#pricing" style="min-height:58px;font-size:17px;padding:18px 32px">Subscribe for ₱1,500/month</a>
+  <div class="fine">Trading involves substantial risk of loss. Not financial advice.</div>
+</div>
+</section>
+</div>
+
+<footer>
+<div class="wrap">
+  <div class="row2"><div><span style="font-family:'Unbounded',sans-serif;font-weight:700;color:#fff">AZURE DRAGON</span> · Automated XAUUSD trading bot</div><div>© 2026 Azure Dragon · [CONTACT EMAIL]</div></div>
+  <div>Risk warning: Trading leveraged products such as forex and gold CFDs carries a high level of risk and may not be suitable for everyone. You may lose some or all of your invested capital. Past performance, including backtests, is not a reliable indicator of future results. Azure Dragon provides software only and does not provide financial, investment, or tax advice, does not manage client funds, and is not a registered investment adviser.</div>
+</div>
+</footer>
+
+<script>
+/* subscribe gate */
+(function(){
+  var ack=document.getElementById('ack'),btn=document.getElementById('subscribe');
+  function sync(){btn.setAttribute('aria-disabled',ack.checked?'false':'true');}
+  ack.addEventListener('change',sync);
+  btn.addEventListener('click',function(e){if(!ack.checked){e.preventDefault();ack.focus();ack.parentElement.style.borderColor='#FFB547';}});
+  sync();
+})();
+
+/* hero panel tilt */
+(function(){
+  var hero=document.getElementById('hero'),panel=document.getElementById('panel');
+  if(!hero||!panel||matchMedia('(hover:none)').matches)return;
+  hero.addEventListener('mousemove',function(e){var r=hero.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;panel.style.setProperty('--ry',(-12+x*20).toFixed(1)+'deg');panel.style.setProperty('--rx',(6-y*12).toFixed(1)+'deg');});
+  hero.addEventListener('mouseleave',function(){panel.style.setProperty('--ry','-12deg');panel.style.setProperty('--rx','6deg');});
+})();
+
+/* ============ AZURE DRAGON — 3D WIREFRAME ============ */
+(function(){
+  var cv=document.getElementById('dragon'),ctx=cv.getContext('2d');
+  var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var W,H,S,SEG,R,D,cx,cy,N=112,K=8;
+  var P=[],T=[],SD=[],UP=[],rad=[];
+  var head,dir,t=0,pearl={x:0,y:0,z:0},sparks=[],stars=[],mist=[];
+  var yaw=0,pitch=-.17,cyw=1,syw=0,cp=1,sp=0;
+  var running=true,last=0,bins={};
+  var C='127,212,255',J='63,224,192',G='245,194,107',A='46,155,255',WH='215,245,255';
+  function rgba(c,a){return 'rgba('+c+','+a+')';}
+  function v(x,y,z){return{x:x,y:y,z:z};}
+  function add(a,b){return v(a.x+b.x,a.y+b.y,a.z+b.z);}
+  function sub(a,b){return v(a.x-b.x,a.y-b.y,a.z-b.z);}
+  function mul(a,s){return v(a.x*s,a.y*s,a.z*s);}
+  function cross(a,b){return v(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x);}
+  function len(a){return Math.hypot(a.x,a.y,a.z);}
+  function norm(a){var l=len(a)||1;return v(a.x/l,a.y/l,a.z/l);}
+  function comb(o,a,ka,b,kb,c,kc){var r=v(o.x+a.x*ka,o.y+a.y*ka,o.z+a.z*ka);if(b){r.x+=b.x*kb;r.y+=b.y*kb;r.z+=b.z*kb;}if(c){r.x+=c.x*kc;r.y+=c.y*kc;r.z+=c.z*kc;}return r;}
+  var ZERO=v(0,0,0),YUP=v(0,1,0);
+
+  function resize(){
+    var d=Math.min(window.devicePixelRatio||1,2);
+    W=window.innerWidth;H=window.innerHeight;
+    cv.width=Math.round(W*d);cv.height=Math.round(H*d);ctx.setTransform(d,0,0,d,0,0);
+    S=Math.max(.55,Math.min(1.3,Math.min(W,H)/820));if(W<600)S=Math.max(.5,S*.85);
+    SEG=12.5*S;R=34*S;D=1100*S;cx=W/2;cy=H/2;
+  }
+  function init(){
+    head=v(-W*.65,0,0);dir=v(1,0,0);
+    for(var i=0;i<N;i++){P[i]=v(head.x-i*SEG,0,0);T[i]=v(1,0,0);SD[i]=v(0,0,1);UP[i]=v(0,1,0);rad[i]=radius(i/(N-1));}
+    stars=[];for(var j=0;j<120;j++)stars.push({x:Math.random(),y:Math.random(),s:Math.random()*1.4+.3,p:Math.random()*6.28});
+    mist=[];for(var k=0;k<7;k++)mist.push({x:Math.random()*W,y:Math.random()*H,r:(180+Math.random()*260)*S,v:(5+Math.random()*9)*(Math.random()<.5?-1:1),c:k%3?A:J,a:.04+Math.random()*.05});
+  }
+  function radius(u){
+    if(u<.07)return R*(.62+.38*(u/.07));
+    if(u<.3)return R*(1-.06*Math.sin((u-.07)/.23*Math.PI));
+    return R*(.05+.95*Math.pow(1-(u-.3)/.7,1.25));
+  }
+  function pulseAt(i){var L=N+40,p1=((t*42)%L)-20,p2=((t*42+L/2)%L)-20;return Math.max(0,1-Math.min(Math.abs(i-p1),Math.abs(i-p2))/6);}
+
+  /* camera */
+  function cam(){yaw=Math.sin(t*.07)*.42;cyw=Math.cos(yaw);syw=Math.sin(yaw);cp=Math.cos(pitch);sp=Math.sin(pitch);}
+  function prj(p){var x1=p.x*cyw+p.z*syw,z1=-p.x*syw+p.z*cyw,y2=p.y*cp-z1*sp,z2=p.y*sp+z1*cp+D,s=D/Math.max(z2,1);return{x:x1,y:y2,z:z2,sx:cx+x1*s,sy:cy-y2*s,s:s};}
+  function rotn(n){var x1=n.x*cyw+n.z*syw,z1=-n.x*syw+n.z*cyw;return{x:x1,y:n.y*cp-z1*sp,z:n.y*sp+z1*cp};}
+  function facing(q,n){var r=rotn(n);return -(r.x*q.x+r.y*q.y+r.z*q.z)>0;}
+  function dm(s){return Math.max(.35,Math.min(1,.45+.55*(s-.72)/.55));}
+
+  /* batched line drawing */
+  function line(a,b,col,al,w){
+    if(a.z<40||b.z<40)return;al=Math.round(Math.min(1,al)*20)/20;if(al<.05)return;
+    var k=col+'|'+al+'|'+(w||1);(bins[k]||(bins[k]=[])).push(a.sx,a.sy,b.sx,b.sy);
+  }
+  function flush(glow){
+    ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
+    for(var k in bins){var p=k.split('|'),arr=bins[k];
+      ctx.strokeStyle=rgba(p[0],p[1]);ctx.lineWidth=parseFloat(p[2])*S;
+      if(glow&&parseFloat(p[1])>=.55){ctx.shadowColor=rgba(A,.9);ctx.shadowBlur=10*S;}else{ctx.shadowBlur=0;}
+      ctx.beginPath();for(var i=0;i<arr.length;i+=4){ctx.moveTo(arr[i],arr[i+1]);ctx.lineTo(arr[i+2],arr[i+3]);}ctx.stroke();}
+    ctx.restore();bins={};
+  }
+  function node(q,sz,col,al){if(q.z<40)return;var s=sz*S*q.s;ctx.fillStyle=rgba(col,al);ctx.fillRect(q.sx-s/2,q.sy-s/2,s,s);}
+
+  /* simulation */
+  function step(dt){
+    t+=dt;
+    pearl=v(W*.33*Math.sin(t*.29)+W*.06*Math.sin(t*.77+.5),H*.2*Math.sin(t*.43+1.2)+H*.05*Math.cos(t*1.05),300*S*Math.sin(t*.37+.7));
+    var to=sub(pearl,head),dist=len(to),d=norm(to);
+    dir=norm(add(dir,mul(sub(d,dir),Math.min(1,1.7*dt))));
+    var w=cross(dir,YUP);if(len(w)>.1)dir=norm(add(dir,mul(norm(w),Math.sin(t*1.6)*.55*dt)));
+    if(Math.abs(dir.y)>.7){dir.y=.7*Math.sign(dir.y);dir=norm(dir);}
+    var spd=(140+Math.min(dist,420)*.38)*S*(1+.18*Math.sin(t*2.2));
+    head=add(head,mul(dir,spd*dt));P[0]=v(head.x,head.y,head.z);
+    for(var i=1;i<N;i++){var dd=sub(P[i],P[i-1]),l=len(dd)||1;P[i]=add(P[i-1],mul(dd,SEG/l));}
+    for(i=0;i<N;i++){
+      var tg=i===0?dir:norm(sub(P[i-1],P[Math.min(N-1,i+1)]));T[i]=tg;
+      var raw=cross(tg,YUP),sd;
+      if(len(raw)<.15)sd=i?SD[i-1]:SD[0];else sd=norm(raw);
+      if(i>0)sd=norm(add(mul(SD[i-1],.5),mul(sd,.5)));
+      var up=norm(cross(sd,tg));SD[i]=cross(tg,up);UP[i]=up;
+    }
+    if(Math.random()<dt*26)sparks.push(spark(pearl,1));
+    if(Math.random()<dt*22){var k=2+Math.floor(Math.random()*(N*.75));sparks.push(spark(add(P[k],v((Math.random()-.5)*rad[k],(Math.random()-.5)*rad[k],(Math.random()-.5)*rad[k])),0));}
+    for(i=sparks.length-1;i>=0;i--){var s=sparks[i];s.life-=dt;s.p=add(s.p,mul(s.v,dt));s.v.y+=10*S*dt;if(s.life<=0)sparks.splice(i,1);}
+    for(i=0;i<mist.length;i++){var m=mist[i];m.x+=m.v*dt;if(m.x>W+m.r)m.x=-m.r;if(m.x<-m.r)m.x=W+m.r;}
+  }
+  function spark(p,gold){var a=Math.random()*6.283,b=Math.random()*3.14-1.57,vv=(10+Math.random()*40)*S;
+    return{p:v(p.x,p.y,p.z),v:v(Math.cos(a)*Math.cos(b)*vv,Math.sin(b)*vv,Math.sin(a)*Math.cos(b)*vv),life:1+Math.random()*1.6,gold:gold};}
+
+  /* scene */
+  function drawBackground(){
+    ctx.clearRect(0,0,W,H);
+    var g=ctx.createRadialGradient(W*.5,H*.4,0,W*.5,H*.4,Math.max(W,H)*.8);
+    g.addColorStop(0,'#081a33');g.addColorStop(.55,'#050e1f');g.addColorStop(1,'#030912');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    for(var i=0;i<stars.length;i++){var s=stars[i];ctx.globalAlpha=.25+.45*(.5+.5*Math.sin(t*1.3+s.p));ctx.fillStyle='#CFEFFF';ctx.fillRect(s.x*W,s.y*H,s.s,s.s);}
+    ctx.globalAlpha=1;
+    for(i=0;i<mist.length;i++){var m=mist[i],mg=ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,m.r);mg.addColorStop(0,rgba(m.c,m.a));mg.addColorStop(1,rgba(m.c,0));ctx.fillStyle=mg;ctx.fillRect(m.x-m.r,m.y-m.r,m.r*2,m.r*2);}
+  }
+  function drawFloor(){
+    var y=-H*.48,st=90*S,x0=-W*1.1,x1=W*1.1,z0=-500*S,z1=2000*S,off=(t*40*S)%st,x,z;
+    function fl(a,b){var m=(a.z+b.z)/2,al=.14*Math.max(0,1-Math.abs(m-D*1.1)/(1700*S));line(a,b,A,al,1);}
+    for(x=x0;x<=x1;x+=st)for(z=z0;z<z1;z+=st)fl(prj(v(x,y,z-off)),prj(v(x,y,z+st-off)));
+    for(z=z0;z<=z1;z+=st){var zz=z-off;for(x=x0;x<x1;x+=st)fl(prj(v(x,y,zz)),prj(v(x+st,y,zz)));}
+    flush(false);
+  }
+  function drawPearl(){
+    var q=prj(pearl),r=16*S;if(q.z<40)return;
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    var gr=r*5*q.s,g=ctx.createRadialGradient(q.sx,q.sy,0,q.sx,q.sy,gr);g.addColorStop(0,rgba(G,.28));g.addColorStop(1,rgba(G,0));
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(q.sx,q.sy,gr,0,6.283);ctx.fill();
+    ctx.fillStyle=rgba(G,.95);ctx.beginPath();ctx.arc(q.sx,q.sy,r*.28*q.s,0,6.283);ctx.fill();
+    ctx.restore();
+    // wire sphere: 3 rotating great circles + 2 latitude rings
+    var rings=[[t*.8,0],[t*.6+1.1,1.2],[t*1.1+2.2,.5]];
+    rings.forEach(function(rr,ci){
+      var ca=Math.cos(rr[0]),sa=Math.sin(rr[0]),cb=Math.cos(rr[1]),sb=Math.sin(rr[1]),prev=null;
+      for(var k=0;k<=24;k++){var a=k/24*6.283,x=Math.cos(a),y=Math.sin(a),z=0;
+        var y1=y*ca-z*sa,z1=y*sa+z*ca,x2=x*cb+z1*sb,z2=-x*sb+z1*cb;
+        var p=prj(v(pearl.x+x2*r,pearl.y+y1*r,pearl.z+z2*r));if(prev)line(prev,p,G,.6,1);prev=p;}
+    });
+    flush(false);
+    var b=r*2.1*q.s,l=b*.45;ctx.save();ctx.strokeStyle=rgba(C,.75);ctx.lineWidth=1.2*S;ctx.beginPath();
+    [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(function(o){var x=q.sx+o[0]*b,y=q.sy+o[1]*b;ctx.moveTo(x-o[0]*l,y);ctx.lineTo(x,y);ctx.lineTo(x,y-o[1]*l);});
+    ctx.stroke();
+    if(W>=700){ctx.font=Math.max(9,Math.round(10*S))+'px "JetBrains Mono", ui-monospace, monospace';ctx.fillStyle=rgba(C,.8);ctx.fillText('TARGET  XAU',q.sx+b+6*S,q.sy-b+4*S);ctx.fillStyle=rgba(G,.75);ctx.fillText('LOCKED',q.sx+b+6*S,q.sy-b+17*S);}
+    ctx.restore();
+  }
+
+  var rings=[];
+  function buildRings(){
+    rings=[];
+    for(var i=0;i<N;i+=2){
+      var r=rad[i],pts=[];
+      for(var j=0;j<K;j++){
+        var th=j*2*Math.PI/K,c=Math.cos(th),s=Math.sin(th),ru=s<0?.82:1;
+        var n=comb(ZERO,SD[i],c,UP[i],s),p=comb(P[i],SD[i],c*r,UP[i],s*r*ru),q=prj(p);
+        q.f=facing(q,n);pts.push(q);
+      }
+      rings.push({i:i,pts:pts});
+    }
+  }
+  function bl(a,b,col,base,w){var f=(a.f&&b.f)?1:(a.f||b.f)?.45:.17;line(a,b,col,base*f*dm((a.s+b.s)/2),w);}
+  function drawBody(){
+    var n=rings.length,ri,j;
+    for(ri=0;ri<n;ri++){
+      var pts=rings[ri].pts,nx=ri+1<n?rings[ri+1].pts:null,major=ri%3===0,pu=pulseAt(rings[ri].i);
+      for(j=0;j<K;j++){
+        var a=pts[j],b=pts[(j+1)%K];
+        bl(a,b,major?J:C,major?.85:.55,major?1.2:.8);
+        if(pu>.3)bl(a,b,WH,pu,1.4);
+        if(nx){
+          bl(a,nx[j],j===6?G:C,(j===2||j===6)?.8:.6,(j===2||j===6)?1.2:.8);
+          if(ri%2===0)bl(a,nx[(j+1)%K],C,.25,.7);
+        }
+      }
+    }
+    // spines (3D fins on the back)
+    for(ri=1;ri<n*.9;ri++){
+      var i=rings[ri].i,u=i/(N-1),h=R*(.25+.75*Math.pow(1-u,.6))*.95;
+      if(ri+1>=n)break;
+      var b1=rings[ri].pts[2],b2=rings[ri+1].pts[2];
+      var ap=prj(comb(P[i],UP[i],rad[i]+h,T[i],-h*.5)),al=(b1.f?.7:.3)*dm(ap.s);
+      line(b1,ap,J,al,.9);line(ap,b2,J,al*.8,.9);
+    }
+    flush(true);
+    // nodes on major rings + spine tips
+    for(ri=0;ri<n;ri+=3){var p2=rings[ri].pts;[0,2,4].forEach(function(jj){if(p2[jj].f)node(p2[jj],2.6,C,.9);});}
+  }
+
+  function drawLeg(i,phase,sg){
+    var P0=P[i],T0=T[i],S0=SD[i],U0=UP[i],r=rad[i],out=mul(S0,sg);
+    var hip=comb(P0,out,r*.75,U0,-r*.45);
+    var a=.7+.4*Math.sin(t*3.2+phase);
+    var kd=norm(comb(ZERO,out,.55,U0,-Math.cos(a),T0,-Math.sin(a)*.8)),knee=add(hip,mul(kd,R*1.25));
+    var fd=norm(comb(ZERO,U0,-.85,T0,.3+.4*Math.sin(t*3.2+phase+1.4),out,.15)),foot=add(knee,mul(fd,R*1.05));
+    var h=prj(hip),k=prj(knee),f=prj(foot),al=(facing(h,out)?.85:.32)*dm(h.s);
+    var pp=mul(norm(cross(kd,T0)),R*.13);
+    line(prj(add(hip,pp)),prj(add(knee,mul(pp,.6))),C,al,1);
+    line(prj(sub(hip,pp)),prj(sub(knee,mul(pp,.6))),C,al,1);
+    line(k,f,C,al,1.1);
+    for(var c=-1;c<=1;c++){var cd=norm(comb(ZERO,fd,.5,T0,.7,out,c*.55)),c1=add(foot,mul(cd,R*.3)),c2=add(c1,mul(norm(add(cd,mul(U0,-.9))),R*.2));
+      var q1=prj(c1);line(f,q1,G,al,1);line(q1,prj(c2),G,al,1);}
+    ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle=rgba(J,al);ctx.lineWidth=1.1*S;
+    [[h,.22],[k,.16]].forEach(function(o){if(o[0].z<40)return;ctx.beginPath();ctx.arc(o[0].sx,o[0].sy,R*o[1]*o[0].s,0,6.283);ctx.stroke();});
+    ctx.restore();node(f,3,G,al);
+  }
+
+  function drawTail(){
+    var e=N-1,tip=prj(P[e]);
+    for(var k=0;k<8;k++){
+      var ph=k*Math.PI/4+t*.6,sc=R*1.1*(1+.2*Math.sin(t*3+k));
+      var end=comb(comb(P[e],T[e],-R*2.6,SD[e],Math.cos(ph)*sc),UP[e],Math.sin(ph)*sc),q=prj(end);
+      line(tip,q,J,.5*dm(q.s),.9);node(q,2,J,.7);
+      if(k){line(q,prevT,J,.25*dm(q.s),.7);}var prevT=q;
+    }
+  }
+
+  function drawMane(){
+    for(var i=1;i<16;i+=2){
+      var k=Math.min(N-1,i+5),r=rad[i];
+      var a=prj(comb(P[i],UP[i],r*.95)),e=prj(comb(comb(P[k],UP[k],rad[k]+R*1.1*(1-i/18),T[k],-R*.3),SD[k],Math.sin(t*3+i)*R*.35));
+      line(a,e,C,(.45-i*.015)*dm(e.s),.8);node(e,1.8,C,.6);
+    }
+  }
+
+  function drawHead(){
+    var u=R*1.4,O=P[0],Tt=T[0],Ss=SD[0],Uu=UP[0];
+    var jaw=.16+.1*Math.sin(t*1.3)+.06*Math.sin(t*3.1),cj=Math.cos(jaw),sj=Math.sin(jaw);
+    function L(x,y,z){return prj(v(O.x+(Tt.x*x+Uu.x*y+Ss.x*z)*u,O.y+(Tt.y*x+Uu.y*y+Ss.y*z)*u,O.z+(Tt.z*x+Uu.z*y+Ss.z*z)*u));}
+    function JW(x,y,z){var dx=x-.9,dy=y+.2;return L(.9+dx*cj+dy*sj,-.2-dx*sj+dy*cj,z);}
+    var top=[[-.3,.6],[.6,.95],[1.9,.5],[2.9,.42],[3.25,.15],[3.0,-.15]].map(function(p){return L(p[0],p[1],0);});
+    var J3=JW(2.75,-.45,0),J4=JW(1.3,-.65,0),hm=dm(top[2].s);
+    for(var k=0;k<5;k++)line(top[k],top[k+1],C,.95*hm,1.4);
+    var eyes=[],nodes=top.slice();
+    for(var sg=-1;sg<=1;sg+=2){
+      var fr=facing(L(1.2,.3,sg*.5),mul(Ss,sg)),m=(fr?1:.35)*hm;
+      var S1=L(.1,.35,.55*sg),S2=L(1.3,.55,.45*sg),S3=L(2.3,.25,.35*sg),S4=L(2.9,.05,.25*sg),L1=L(1.0,-.2,.5*sg),L2=L(2.2,-.18,.32*sg),Bk=L(-.3,-.3,.5*sg);
+      [[S1,S2],[S2,S3],[S3,S4],[S4,top[5]],[Bk,L1],[L1,L2],[L2,top[5]],[top[0],S1],[S1,Bk]].forEach(function(e){line(e[0],e[1],C,.9*m,1.3);});
+      [[top[1],S1],[top[1],S2],[top[2],S2],[top[2],S3],[top[3],S3],[top[3],S4],[top[4],S4],[S1,L1],[S2,L1],[S2,L2],[S3,L2],[S4,L2]].forEach(function(e){line(e[0],e[1],C,.35*m,.7);});
+      var J0=JW(.2,-.35,.45*sg),J1=JW(1.4,-.3,.4*sg),J2=JW(2.6,-.35,.22*sg),J5=JW(.1,-.6,.3*sg);
+      [[J0,J1],[J1,J2],[J2,J3],[J0,J5],[J5,J4],[J4,J3]].forEach(function(e){line(e[0],e[1],C,.75*m,1.1);});
+      [[J1,J4],[J2,J4],[J0,Bk]].forEach(function(e){line(e[0],e[1],C,.3*m,.7);});
+      for(var x=1.4;x<2.8;x+=.28){line(L(x,-.17,.3*sg),L(x+.06,-.32,.28*sg),WH,.6*m,.9);line(JW(x-.6,-.32,.33*sg),JW(x-.55,-.18,.33*sg),WH,.5*m,.9);}
+      // horns
+      var hp=[[.4,.85,.3],[-.4,1.3,.45],[-1.2,1.6,.55],[-2.0,2.1,.6]].map(function(p){return L(p[0],p[1],p[2]*sg);});
+      for(k=0;k<3;k++)line(hp[k],hp[k+1],G,.85*m,1.3);
+      var hb1=L(-.3,1.85,.55*sg),hb2=L(-1.0,2.2,.7*sg);line(hp[1],hb1,G,.75*m,1);line(hp[2],hb2,G,.75*m,1);
+      hp.push(hb1,hb2);hp.forEach(function(q){nodes.push(q);});
+      // mane
+      for(k=0;k<4;k++){var w=Math.sin(t*3+k*.9+sg)*.25;var a=L(.0-k*.1,.65-k*.25,.25*sg),b=L(-1.2-k*.2,.9-k*.3+w,(.5+k*.15)*sg),c=L(-2.4-k*.2,.8-k*.35-w,(.7+k*.2)*sg);
+        line(a,b,J,.45*m,.8);line(b,c,J,.35*m,.8);nodes.push(c);}
+      eyes.push({q:L(1.45,.62,.4*sg),m:m,f:fr});
+      nodes.push(S1,S2,S3,S4,L1,L2,Bk,J0,J1,J2,J5);
+      // whisker
+      ctx.save();ctx.globalCompositeOperation='lighter';ctx.setLineDash([6*S,4*S]);ctx.strokeStyle=rgba(C,.65*m);ctx.lineWidth=.9*S;ctx.beginPath();
+      var wl=null;for(var s2=0;s2<=12;s2++){var f2=s2/12,q=L(2.95+.9*f2-3.6*f2*f2,.02-.5*f2+.45*Math.sin(t*2.1+f2*4+sg)*f2,sg*(.25+1.3*f2));if(s2)ctx.lineTo(q.sx,q.sy);else ctx.moveTo(q.sx,q.sy);wl=q;}
+      ctx.stroke();ctx.restore();node(wl,2.2,C,.7*m);
+    }
+    nodes.push(J3,J4);
+    flush(true);
+    nodes.forEach(function(q){node(q,2.3,C,.85*hm);});
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    eyes.forEach(function(e){var q=e.q;if(q.z<40)return;var s=5*S*q.s;ctx.shadowColor=rgba(G,1);ctx.shadowBlur=(e.f?16:4)*S;ctx.fillStyle=rgba(G,e.f?.95:.35);
+      ctx.beginPath();ctx.moveTo(q.sx-s*1.3,q.sy);ctx.lineTo(q.sx,q.sy-s*.7);ctx.lineTo(q.sx+s*1.3,q.sy);ctx.lineTo(q.sx,q.sy+s*.7);ctx.closePath();ctx.fill();});
+    ctx.restore();
+  }
+
+  function drawSparks(){
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    for(var i=0;i<sparks.length;i++){var s=sparks[i],q=prj(s.p);if(q.z<40)continue;var a=Math.min(1,s.life/1.2),sz=1.6*S*q.s;
+      ctx.fillStyle=s.gold?rgba(G,a):rgba(C,a*.8);ctx.fillRect(q.sx,q.sy,sz,sz);}
+    ctx.restore();
+  }
+  function drawHud(){
+    if(W<700)return;var q=prj(P[8]);if(q.z<40)return;
+    var ox=q.sx-40*S,oy=q.sy-70*S;
+    ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle=rgba(C,.55);ctx.lineWidth=.8*S;
+    ctx.beginPath();ctx.moveTo(q.sx,q.sy);ctx.lineTo(ox,oy);ctx.lineTo(ox-120*S,oy);ctx.stroke();
+    ctx.fillStyle=rgba(C,.9);ctx.fillRect(q.sx-1.5*S,q.sy-1.5*S,3*S,3*S);
+    ctx.font=Math.max(9,Math.round(10*S))+'px "JetBrains Mono", ui-monospace, monospace';
+    ctx.fillStyle=rgba(C,.85);ctx.fillText('AZURE-DRGN  //  LIVE',ox-118*S,oy-6*S);
+    ctx.fillStyle=rgba(G,.8);ctx.fillText('EMOTION 0.00',ox-118*S,oy+13*S);
+    ctx.restore();
+  }
+
+  function render(){
+    cam();
+    drawBackground();
+    drawFloor();
+    drawPearl();
+    buildRings();
+    var iA=Math.round(N*.15),iB=Math.round(N*.46);
+    drawLeg(iA,0,1);drawLeg(iA,3.1,-1);drawLeg(iB,2.4,1);drawLeg(iB,5.5,-1);
+    drawTail();drawMane();
+    drawBody();
+    drawHead();
+    drawSparks();
+    drawHud();
+  }
+  function frame(ts){
+    if(!running)return;
+    var dt=last?Math.min(.05,(ts-last)/1000):.016;last=ts;
+    step(dt);render();requestAnimationFrame(frame);
+  }
+
+  resize();init();
+  if(reduce){
+    for(var i=0;i<480;i++)step(1/60);render();
+    window.addEventListener('resize',function(){resize();render();});
+  }else{
+    for(var j=0;j<90;j++)step(1/60);
+    requestAnimationFrame(frame);
+    window.addEventListener('resize',resize);
+    document.addEventListener('visibilitychange',function(){if(document.hidden){running=false;}else{running=true;last=0;requestAnimationFrame(frame);}});
+  }
+})();
+</script>
+</body>
+</html>
